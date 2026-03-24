@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import font, filedialog, messagebox
 from PIL import Image, ImageTk
 import threading
+import random
+import math
 import os
 import db
 
@@ -17,12 +19,16 @@ CARD      = "#1a1a1a"
 BORDER    = "#2a2a2a"
 NEON      = "#39ff14"
 NEON_DIM  = "#27b30d"
+NEON_DARK = "#0d3d05"
 TEXT      = "#e0e0e0"
 SUBTEXT   = "#888888"
 ERROR_CLR = "#ff4444"
 SUCCESS   = "#39ff14"
 PREVIEW_W = 340
 PREVIEW_H = 280
+
+# ── Particle config ──────────────────────────────────────────────────────────
+NUM_PARTICLES = 38
 
 
 class LoginApp(tk.Tk):
@@ -33,12 +39,21 @@ class LoginApp(tk.Tk):
         self.resizable(True, True)
         self._alpha = 0.0
         self._current_user = None
-        self._orig_image   = None   # PIL Image — original
-        self._result_image = None   # PIL Image — bg removed
-        self._history      = []     # list of (filename, output_path)
+        self._orig_image   = None
+        self._result_image = None
+        self._history      = []
+        self._particles    = []
+        self._logo_pulse   = 0
+        self._logo_growing = True
+        self._subtitle_idx = 0
+        self._subtitle_texts = [
+            "Remove backgrounds instantly ✨",
+            "Fast. Clean. Precise. 🎯",
+            "Sign in to get started →",
+        ]
         self._build_fonts()
         self._build_auth_ui()
-        self._center_window(420, 600)
+        self._center_window(480, 660)
         self._fade_in()
         self._init_db()
 
@@ -50,15 +65,17 @@ class LoginApp(tk.Tk):
                               f"DB error: {e}", ERROR_CLR)
 
     def _build_fonts(self):
-        self.f_title      = font.Font(family="Segoe UI", size=20, weight="bold")
+        self.f_title      = font.Font(family="Segoe UI", size=22, weight="bold")
         self.f_sub        = font.Font(family="Segoe UI", size=9)
-        self.f_label      = font.Font(family="Segoe UI", size=10)
+        self.f_label      = font.Font(family="Segoe UI", size=10, weight="bold")
         self.f_entry      = font.Font(family="Segoe UI", size=11)
         self.f_btn        = font.Font(family="Segoe UI", size=11, weight="bold")
         self.f_link       = font.Font(family="Segoe UI", size=9, underline=True)
         self.f_dash_title = font.Font(family="Segoe UI", size=18, weight="bold")
         self.f_dash_sub   = font.Font(family="Segoe UI", size=10)
         self.f_card_title = font.Font(family="Segoe UI", size=12, weight="bold")
+        self.f_logo       = font.Font(family="Segoe UI", size=18, weight="bold")
+        self.f_subtitle   = font.Font(family="Segoe UI", size=10)
 
     # ════════════════════════════════════════════════════════════════════════
     # AUTH UI
@@ -72,13 +89,19 @@ class LoginApp(tk.Tk):
         self.auth_root.columnconfigure(0, weight=1)
         self.auth_root.rowconfigure(0, weight=1)
 
-        self.card = tk.Frame(self.auth_root, bg=CARD, bd=0,
-                             highlightthickness=1, highlightbackground=BORDER)
-        self.card.grid(row=0, column=0, padx=40, pady=40, sticky="nsew")
-        self.card.columnconfigure(0, weight=1)
+        # Animated canvas background — fills entire auth area
+        self.bg_canvas = tk.Canvas(self.auth_root, bg=BG, highlightthickness=0)
+        self.bg_canvas.place(x=0, y=0, relwidth=1.0, relheight=1.0)
 
-        self.login_frame  = tk.Frame(self.card, bg=CARD)
-        self.signup_frame = tk.Frame(self.card, bg=CARD)
+        # Card overlay on top of canvas using place so canvas shows behind
+        self.card_frame = tk.Frame(self.auth_root, bg=CARD, bd=0,
+                                   highlightthickness=1, highlightbackground=NEON_DIM)
+        self.card_frame.columnconfigure(0, weight=1)
+        self.auth_root.update_idletasks()
+        self.after(50, self._place_card)
+
+        self.login_frame  = tk.Frame(self.card_frame, bg=CARD)
+        self.signup_frame = tk.Frame(self.card_frame, bg=CARD)
         for f in (self.login_frame, self.signup_frame):
             f.grid(row=0, column=0, sticky="nsew")
             f.columnconfigure(0, weight=1)
@@ -87,73 +110,206 @@ class LoginApp(tk.Tk):
         self._build_signup_frame()
         self.login_frame.tkraise()
 
+        # Init particles after widget is ready
+        self.after(100, self._init_particles)
+        self.auth_root.bind("<Configure>", self._on_auth_resize)
+
+    def _place_card(self):
+        self.auth_root.update_idletasks()
+        w = self.auth_root.winfo_width()  or 480
+        h = self.auth_root.winfo_height() or 660
+        cw, ch = 380, min(h - 60, 600)
+        x = (w - cw) // 2
+        y = (h - ch) // 2
+        self.card_frame.place(x=x, y=y, width=cw, height=ch)
+
+    def _on_auth_resize(self, event):
+        self._place_card()
+
+    def _init_particles(self):
+        w = self.bg_canvas.winfo_width()  or 480
+        h = self.bg_canvas.winfo_height() or 660
+        self._particles = []
+        for _ in range(NUM_PARTICLES):
+            self._particles.append({
+                "x": random.uniform(0, w),
+                "y": random.uniform(0, h),
+                "r": random.uniform(1.5, 4),
+                "vx": random.uniform(-0.4, 0.4),
+                "vy": random.uniform(-0.6, -0.1),
+                "alpha": random.uniform(0.3, 1.0),
+                "fade": random.choice([-1, 1]) * random.uniform(0.005, 0.015),
+            })
+        self._animate_particles()
+        self._animate_logo_pulse()
+        self._animate_subtitle()
+
+    def _animate_particles(self):
+        c = self.bg_canvas
+        c.delete("particle")
+        w = c.winfo_width()  or 480
+        h = c.winfo_height() or 660
+        for p in self._particles:
+            p["x"] += p["vx"]
+            p["y"] += p["vy"]
+            p["alpha"] += p["fade"]
+            if p["alpha"] <= 0.1 or p["alpha"] >= 1.0:
+                p["fade"] *= -1
+            if p["y"] < -10:
+                p["y"] = h + 5
+                p["x"] = random.uniform(0, w)
+            if p["x"] < -10 or p["x"] > w + 10:
+                p["x"] = random.uniform(0, w)
+            # Draw glowing dot
+            r = p["r"]
+            x, y = p["x"], p["y"]
+            intensity = int(p["alpha"] * 255)
+            col = f"#{0:02x}{intensity:02x}{0:02x}"
+            c.create_oval(x - r, y - r, x + r, y + r,
+                          fill=col, outline="", tags="particle")
+            # Soft glow ring
+            c.create_oval(x - r*2.5, y - r*2.5, x + r*2.5, y + r*2.5,
+                          outline=col, width=1, tags="particle")
+        # Draw subtle grid lines
+        for gx in range(0, w, 60):
+            c.create_line(gx, 0, gx, h, fill="#1a1a1a", width=1, tags="particle")
+        for gy in range(0, h, 60):
+            c.create_line(0, gy, w, gy, fill="#1a1a1a", width=1, tags="particle")
+        self.after(30, self._animate_particles)
+
+    def _animate_logo_pulse(self):
+        if not hasattr(self, "_logo_lbl"):
+            self.after(100, self._animate_logo_pulse)
+            return
+        step = 0.04
+        if self._logo_growing:
+            self._logo_pulse += step
+            if self._logo_pulse >= 1.0:
+                self._logo_growing = False
+        else:
+            self._logo_pulse -= step
+            if self._logo_pulse <= 0.0:
+                self._logo_growing = True
+        # Interpolate between NEON_DIM and NEON
+        t = (math.sin(self._logo_pulse * math.pi) + 1) / 2
+        r = int(0x27 + (0x39 - 0x27) * t)
+        g = int(0xb3 + (0xff - 0xb3) * t)
+        b = int(0x0d + (0x14 - 0x0d) * t)
+        col = f"#{r:02x}{g:02x}{b:02x}"
+        self._logo_lbl.config(fg=col)
+        self.after(40, self._animate_logo_pulse)
+
+    def _animate_subtitle(self):
+        if not hasattr(self, "_subtitle_lbl"):
+            self.after(200, self._animate_subtitle)
+            return
+        self._subtitle_idx = (self._subtitle_idx + 1) % len(self._subtitle_texts)
+        target = self._subtitle_texts[self._subtitle_idx]
+        self._type_text(target, 0)
+
+    def _type_text(self, text, idx):
+        if not hasattr(self, "_subtitle_lbl"):
+            return
+        if idx <= len(text):
+            self._subtitle_lbl.config(text=text[:idx])
+            self.after(45, self._type_text, text, idx + 1)
+        else:
+            self.after(2800, self._animate_subtitle)
+
     def _build_login_frame(self):
         p = self.login_frame
-        tk.Label(p, text="⬡", font=font.Font(size=28),
-                 bg=CARD, fg=NEON).grid(row=0, column=0, pady=(36, 4))
-        tk.Label(p, text="Image Background Remover",
-                 font=self.f_title, bg=CARD, fg=TEXT).grid(row=1, column=0)
-        tk.Label(p, text="Sign in to continue",
-                 font=self.f_sub, bg=CARD, fg=SUBTEXT).grid(row=2, column=0, pady=(2, 24))
 
-        self._field_label(p, "USERNAME", row=3)
+        # Top neon accent bar
+        tk.Frame(p, bg=NEON, height=3).grid(row=0, column=0, sticky="ew")
+
+        # Logo
+        self._logo_lbl = tk.Label(p, text="⬡ Image Background Remover", font=self.f_logo,
+                                   bg=CARD, fg=NEON)
+        self._logo_lbl.grid(row=1, column=0, pady=(28, 2))
+
+        # Animated subtitle
+        self._subtitle_lbl = tk.Label(p, text="", font=self.f_subtitle,
+                                       bg=CARD, fg=NEON_DIM)
+        self._subtitle_lbl.grid(row=2, column=0, pady=(0, 6))
+
+        tk.Label(p, text="Sign in to your account",
+                 font=self.f_sub, bg=CARD, fg=SUBTEXT).grid(row=3, column=0, pady=(0, 20))
+
+        # Divider
+        self._divider(p, row=4)
+
+        self._field_label(p, "👤  USERNAME", row=5)
         self.login_user_var = tk.StringVar()
-        self._styled_entry(p, self.login_user_var, row=4)
+        self._styled_entry(p, self.login_user_var, row=6)
 
-        self._field_label(p, "PASSWORD", row=5)
+        self._field_label(p, "🔒  PASSWORD", row=7)
         self.login_pass_var  = tk.StringVar()
         self.show_login_pass = tk.BooleanVar(value=False)
         pf = tk.Frame(p, bg=CARD)
-        pf.grid(row=6, column=0, sticky="ew", padx=32, pady=(0, 4))
+        pf.grid(row=8, column=0, sticky="ew", padx=32, pady=(0, 4))
         pf.columnconfigure(0, weight=1)
         self.login_pass_entry = self._styled_entry(pf, self.login_pass_var, row=0, show="●", container=pf)
-        tog = tk.Label(pf, text="Show", font=self.f_link, bg=CARD, fg=SUBTEXT, cursor="hand2")
+        tog = tk.Label(pf, text="👁", font=self.f_link, bg=CARD, fg=SUBTEXT, cursor="hand2")
         tog.grid(row=0, column=1, padx=(6, 0))
         tog.bind("<Button-1>", lambda e: self._toggle_pass(tog, self.login_pass_entry, self.show_login_pass))
 
         self.login_msg_var = tk.StringVar()
         self.login_msg_lbl = tk.Label(p, textvariable=self.login_msg_var,
-                                      font=self.f_sub, bg=CARD, fg=ERROR_CLR, wraplength=320)
-        self.login_msg_lbl.grid(row=7, column=0, pady=(4, 0))
+                                      font=self.f_sub, bg=CARD, fg=ERROR_CLR, wraplength=340)
+        self.login_msg_lbl.grid(row=9, column=0, pady=(4, 0))
 
-        self.login_btn = self._neon_button(p, "LOGIN", self._on_login, row=8)
-        tk.Frame(p, bg=BORDER, height=1).grid(row=9, column=0, sticky="ew", padx=32, pady=16)
-        self._ghost_button(p, "CREATE AN ACCOUNT", lambda: self._switch_to("signup"), row=10)
-        tk.Label(p, text="", bg=CARD).grid(row=11, pady=8)
+        self.login_btn = self._neon_button(p, "✦  LOGIN", self._on_login, row=10)
+
+        self._divider(p, row=11)
+
+        self._ghost_button(p, "CREATE AN ACCOUNT →", lambda: self._switch_to("signup"), row=12)
+        tk.Label(p, text="", bg=CARD).grid(row=13, pady=6)
 
     def _build_signup_frame(self):
         p = self.signup_frame
-        tk.Label(p, text="⬡", font=font.Font(size=28),
-                 bg=CARD, fg=NEON).grid(row=0, column=0, pady=(36, 4))
-        tk.Label(p, text="Create Account",
-                 font=self.f_title, bg=CARD, fg=TEXT).grid(row=1, column=0)
+
+        tk.Frame(p, bg=NEON, height=3).grid(row=0, column=0, sticky="ew")
+
+        tk.Label(p, text="⬡ Image Background Remover", font=self.f_logo,
+                 bg=CARD, fg=NEON).grid(row=1, column=0, pady=(28, 2))
+        tk.Label(p, text="Create your account", font=self.f_subtitle,
+                 bg=CARD, fg=NEON_DIM).grid(row=2, column=0, pady=(0, 6))
         tk.Label(p, text="Fill in the details below",
-                 font=self.f_sub, bg=CARD, fg=SUBTEXT).grid(row=2, column=0, pady=(2, 24))
+                 font=self.f_sub, bg=CARD, fg=SUBTEXT).grid(row=3, column=0, pady=(0, 20))
 
-        self._field_label(p, "USERNAME", row=3)
+        self._divider(p, row=4)
+
+        self._field_label(p, "👤  USERNAME", row=5)
         self.signup_user_var = tk.StringVar()
-        self._styled_entry(p, self.signup_user_var, row=4)
+        self._styled_entry(p, self.signup_user_var, row=6)
 
-        self._field_label(p, "PASSWORD", row=5)
+        self._field_label(p, "🔒  PASSWORD", row=7)
         self.signup_pass_var  = tk.StringVar()
         self.show_signup_pass = tk.BooleanVar(value=False)
         pf = tk.Frame(p, bg=CARD)
-        pf.grid(row=6, column=0, sticky="ew", padx=32, pady=(0, 4))
+        pf.grid(row=8, column=0, sticky="ew", padx=32, pady=(0, 4))
         pf.columnconfigure(0, weight=1)
         self.signup_pass_entry = self._styled_entry(pf, self.signup_pass_var, row=0, show="●", container=pf)
-        tog = tk.Label(pf, text="Show", font=self.f_link, bg=CARD, fg=SUBTEXT, cursor="hand2")
+        tog = tk.Label(pf, text="👁", font=self.f_link, bg=CARD, fg=SUBTEXT, cursor="hand2")
         tog.grid(row=0, column=1, padx=(6, 0))
         tog.bind("<Button-1>", lambda e: self._toggle_pass(tog, self.signup_pass_entry, self.show_signup_pass))
 
         self.signup_msg_var = tk.StringVar()
         self.signup_msg_lbl = tk.Label(p, textvariable=self.signup_msg_var,
-                                       font=self.f_sub, bg=CARD, fg=ERROR_CLR, wraplength=320)
-        self.signup_msg_lbl.grid(row=7, column=0, pady=(4, 0))
+                                       font=self.f_sub, bg=CARD, fg=ERROR_CLR, wraplength=340)
+        self.signup_msg_lbl.grid(row=9, column=0, pady=(4, 0))
 
-        self.signup_btn = self._neon_button(p, "SIGN UP", self._on_signup, row=8)
-        tk.Frame(p, bg=BORDER, height=1).grid(row=9, column=0, sticky="ew", padx=32, pady=16)
-        self._ghost_button(p, "BACK TO LOGIN", lambda: self._switch_to("login"), row=10)
-        tk.Label(p, text="", bg=CARD).grid(row=11, pady=8)
+        self.signup_btn = self._neon_button(p, "✦  SIGN UP", self._on_signup, row=10)
+
+        self._divider(p, row=11)
+
+        self._ghost_button(p, "← BACK TO LOGIN", lambda: self._switch_to("login"), row=12)
+        tk.Label(p, text="", bg=CARD).grid(row=13, pady=6)
+
+    def _divider(self, parent, row):
+        tk.Frame(parent, bg=BORDER, height=1).grid(
+            row=row, column=0, sticky="ew", padx=32, pady=10)
+
 
     # ════════════════════════════════════════════════════════════════════════
     # DASHBOARD
@@ -175,7 +331,6 @@ class LoginApp(tk.Tk):
         self.dash_root.columnconfigure(0, weight=1)
         self.dash_root.rowconfigure(1, weight=1)
 
-        # Navbar
         nav = tk.Frame(self.dash_root, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
         nav.grid(row=0, column=0, sticky="ew")
         nav.columnconfigure(1, weight=1)
@@ -192,7 +347,6 @@ class LoginApp(tk.Tk):
         lb.bind("<Enter>", lambda e: lb.config(bg=BORDER))
         lb.bind("<Leave>", lambda e: lb.config(bg=CARD))
 
-        # Body — left sidebar + right editor
         body = tk.Frame(self.dash_root, bg=BG)
         body.grid(row=1, column=0, sticky="nsew")
         body.columnconfigure(1, weight=1)
@@ -201,7 +355,6 @@ class LoginApp(tk.Tk):
         self._build_sidebar(body)
         self._build_editor(body)
 
-        # Status bar
         self.status_var = tk.StringVar(value="Ready — select an image to get started.")
         tk.Label(self.dash_root, textvariable=self.status_var,
                  font=self.f_sub, bg=CARD, fg=SUBTEXT,
@@ -241,13 +394,11 @@ class LoginApp(tk.Tk):
         ed.columnconfigure((0, 1), weight=1)
         ed.rowconfigure(1, weight=1)
 
-        # Labels row
         tk.Label(ed, text="Original", font=self.f_card_title,
                  bg=BG, fg=SUBTEXT).grid(row=0, column=0, pady=(0, 6))
         tk.Label(ed, text="Result", font=self.f_card_title,
                  bg=BG, fg=SUBTEXT).grid(row=0, column=1, pady=(0, 6))
 
-        # Preview canvases
         self.canvas_orig = tk.Canvas(ed, bg=CARD, bd=0,
                                      highlightthickness=1, highlightbackground=BORDER,
                                      width=PREVIEW_W, height=PREVIEW_H)
@@ -261,19 +412,17 @@ class LoginApp(tk.Tk):
         self._draw_placeholder(self.canvas_orig,  "Click 'Remove BG' or drop image")
         self._draw_placeholder(self.canvas_result, "Result will appear here")
 
-        # Action buttons row
         btn_row = tk.Frame(ed, bg=BG)
         btn_row.grid(row=2, column=0, columnspan=2, pady=(14, 0), sticky="ew")
         btn_row.columnconfigure((0, 1, 2), weight=1)
 
-        self.open_btn = self._neon_btn_small(btn_row, "📂  Open Image", self._on_remove_bg, col=0)
+        self.open_btn    = self._neon_btn_small(btn_row, "📂  Open Image", self._on_remove_bg, col=0)
         self.process_btn = self._neon_btn_small(btn_row, "✨  Remove Background", self._run_remove_bg, col=1)
-        self.save_btn = self._neon_btn_small(btn_row, "💾  Save Result", self._on_save, col=2)
+        self.save_btn    = self._neon_btn_small(btn_row, "💾  Save Result", self._on_save, col=2)
 
         self.process_btn.config(state="disabled")
         self.save_btn.config(state="disabled")
 
-        # Progress bar (hidden until processing)
         self.progress_frame = tk.Frame(ed, bg=BG)
         self.progress_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         self.progress_frame.columnconfigure(0, weight=1)
@@ -357,7 +506,6 @@ class LoginApp(tk.Tk):
         if not out:
             return
         self._result_image.save(out)
-        # Update history entry with saved path
         if self._history:
             name, _ = self._history[-1]
             self._history[-1] = (name, out)
@@ -468,12 +616,11 @@ class LoginApp(tk.Tk):
 
         tk_img = ImageTk.PhotoImage(thumb)
         canvas.delete("all")
-        canvas.image = tk_img  # keep reference
+        canvas.image = tk_img
         x, y = cw // 2, ch // 2
         canvas.create_image(x, y, anchor="center", image=tk_img)
 
     def _make_checker(self, w, h, size=12):
-        """Create a grey checkerboard background for transparent images."""
         img = Image.new("RGB", (w, h))
         c1, c2 = (200, 200, 200), (150, 150, 150)
         for row in range(0, h, size):
@@ -496,7 +643,6 @@ class LoginApp(tk.Tk):
         if getattr(self, "_stop_progress", False):
             return
         pos = (pos + 0.015) % 1.0
-        # Ping-pong fill to show indeterminate progress
         fill = 0.3 + 0.3 * abs(pos * 2 - 1)
         self.progress_bar_fill.place(relwidth=fill)
         self.after(30, self._animate_progress, pos)
@@ -517,18 +663,18 @@ class LoginApp(tk.Tk):
 
     def _field_label(self, parent, text, row):
         tk.Label(parent, text=text, font=self.f_label,
-                 bg=CARD, fg=SUBTEXT, anchor="w").grid(
-            row=row, column=0, sticky="w", padx=32, pady=(10, 2))
+                 bg=CARD, fg=NEON_DIM, anchor="w").grid(
+            row=row, column=0, sticky="w", padx=32, pady=(12, 2))
 
     def _styled_entry(self, parent, var, row, show="", container=None):
         host = container if container else parent
         e = tk.Entry(host, textvariable=var, show=show,
-                     font=self.f_entry, bg="#252525", fg=TEXT,
+                     font=self.f_entry, bg="#1f1f1f", fg=TEXT,
                      insertbackground=NEON, relief="flat", bd=0,
-                     highlightthickness=1, highlightbackground=BORDER,
+                     highlightthickness=2, highlightbackground=BORDER,
                      highlightcolor=NEON)
         e.grid(row=row, column=0, sticky="ew",
-               padx=(0 if container else 32), ipady=8)
+               padx=(0 if container else 32), ipady=10)
         e.bind("<FocusIn>",  lambda ev, w=e: w.config(highlightbackground=NEON))
         e.bind("<FocusOut>", lambda ev, w=e: w.config(highlightbackground=BORDER))
         return e
@@ -537,7 +683,7 @@ class LoginApp(tk.Tk):
         btn = tk.Button(parent, text=text, command=cmd,
                         font=self.f_btn, bg=NEON, fg=BG,
                         activebackground=NEON_DIM, activeforeground=BG,
-                        relief="flat", bd=0, cursor="hand2", pady=10)
+                        relief="flat", bd=0, cursor="hand2", pady=12)
         btn.grid(row=row, column=0, sticky="ew", padx=32, pady=(16, 4))
         btn.bind("<Enter>", lambda e: btn.config(bg=NEON_DIM))
         btn.bind("<Leave>", lambda e: btn.config(bg=NEON))
@@ -546,19 +692,19 @@ class LoginApp(tk.Tk):
     def _ghost_button(self, parent, text, cmd, row):
         btn = tk.Button(parent, text=text, command=cmd,
                         font=self.f_btn, bg=CARD, fg=NEON,
-                        activebackground=BORDER, activeforeground=NEON,
+                        activebackground=NEON_DARK, activeforeground=NEON,
                         relief="flat", bd=0, cursor="hand2", pady=10,
-                        highlightthickness=1, highlightbackground=NEON)
+                        highlightthickness=1, highlightbackground=NEON_DIM)
         btn.grid(row=row, column=0, sticky="ew", padx=32, pady=(0, 4))
-        btn.bind("<Enter>", lambda e: btn.config(bg=BORDER))
-        btn.bind("<Leave>", lambda e: btn.config(bg=CARD))
+        btn.bind("<Enter>", lambda e: btn.config(bg=NEON_DARK, highlightbackground=NEON))
+        btn.bind("<Leave>", lambda e: btn.config(bg=CARD, highlightbackground=NEON_DIM))
         return btn
 
     def _toggle_pass(self, lbl, entry, var):
         if var.get():
-            var.set(False); entry.config(show="●"); lbl.config(text="Show")
+            var.set(False); entry.config(show="●"); lbl.config(text="👁")
         else:
-            var.set(True);  entry.config(show="");  lbl.config(text="Hide")
+            var.set(True);  entry.config(show="");  lbl.config(text="👁\u200d🗨️")
 
     def _switch_to(self, view):
         if view == "signup":
@@ -580,7 +726,7 @@ class LoginApp(tk.Tk):
         pwd  = self.login_pass_var.get().strip()
         if not user or not pwd:
             self._set_message(self.login_msg_var, self.login_msg_lbl,
-                              "Fields cannot be empty.", ERROR_CLR)
+                              "⚠  Fields cannot be empty.", ERROR_CLR)
             self._shake(self.login_btn); return
         try:
             if db.validate_user(user, pwd):
@@ -606,7 +752,7 @@ class LoginApp(tk.Tk):
         self._orig_image   = None
         self._result_image = None
         self.dash_root.grid_remove()
-        self._center_window(420, 600)
+        self._center_window(480, 660)
         self.minsize(360, 560)
         self._switch_to("login")
         self.auth_root.grid(row=0, column=0, sticky="nsew")
