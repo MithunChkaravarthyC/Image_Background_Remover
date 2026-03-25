@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(64) NOT NULL
 );
+CREATE TABLE IF NOT EXISTS history (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    username    VARCHAR(50) NOT NULL,
+    input_path  TEXT NOT NULL,
+    output_path TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -47,7 +54,6 @@ def get_connection():
 
 def init_db():
     """Create database + tables if they don't exist."""
-    # Connect without specifying the database first so we can create it
     cfg = {k: v for k, v in DB_CONFIG.items() if k != "database"}
     conn = mysql.connector.connect(**cfg)
     cur  = conn.cursor()
@@ -59,7 +65,6 @@ def init_db():
             cur.execute(s)
     conn.commit()
 
-    # Seed default admin if not present
     cur.execute("SELECT id FROM users WHERE username = %s", ("admin",))
     if not cur.fetchone():
         cur.execute(
@@ -73,7 +78,6 @@ def init_db():
 
 
 def validate_user(username: str, password: str) -> bool:
-    """Return True if credentials match a record in users table."""
     try:
         conn = get_connection()
         cur  = conn.cursor()
@@ -90,7 +94,6 @@ def validate_user(username: str, password: str) -> bool:
 
 
 def register_user(username: str, password: str) -> tuple[bool, str]:
-    """Insert a new user. Returns (success, message)."""
     if not username or not password:
         return False, "Username and password are required."
     try:
@@ -108,3 +111,35 @@ def register_user(username: str, password: str) -> tuple[bool, str]:
         return False, "Username already exists."
     except Error as e:
         return False, f"DB error: {e}"
+
+
+def add_history(username: str, input_path: str, output_path: str) -> None:
+    try:
+        conn = get_connection()
+        cur  = conn.cursor()
+        cur.execute(
+            "INSERT INTO history (username, input_path, output_path) VALUES (%s, %s, %s)",
+            (username, input_path, output_path)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Error:
+        pass
+
+
+def get_history(username: str) -> list:
+    try:
+        conn = get_connection()
+        cur  = conn.cursor()
+        cur.execute(
+            "SELECT id, input_path, output_path, created_at FROM history "
+            "WHERE username = %s ORDER BY created_at DESC",
+            (username,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return rows
+    except Error:
+        return []
