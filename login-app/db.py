@@ -1,8 +1,3 @@
-"""
-db.py — MySQL database layer for Image Editor Login
-Requires: pip install mysql-connector-python
-"""
-
 import mysql.connector
 from mysql.connector import Error
 import hashlib
