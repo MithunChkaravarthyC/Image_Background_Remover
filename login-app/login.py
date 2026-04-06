@@ -958,17 +958,18 @@ class LoginApp(tk.Tk):
         self._set_message(self.signup_msg_var, self.signup_msg_lbl,
                           msg, SUCCESS if ok else ERROR_CLR)
         if ok:
-            self.after(800, lambda: self._show_dashboard(user))
+            self.after(800, lambda: self._switch_to("login"))
 
     def _on_logout(self):
         self._current_user = None
         self._orig_image   = None
         self._result_image = None
-        self.dash_root.grid_remove()
+        if hasattr(self, 'dash_root'):
+            self.dash_root.grid_remove()
         self._center_window(480, 660)
         self.minsize(360, 560)
-        self._switch_to("login")
         self.auth_root.grid(row=0, column=0, sticky="nsew")
+        self._switch_to("login")
 
     def _set_message(self, var, lbl, text, color):
         var.set(text); lbl.config(fg=color)
