@@ -19,7 +19,6 @@ class LoginApp(tk.Tk):
         self.title("Image Background Remover"); self.configure(bg=BG); self.resizable(True, True)
         self._alpha, self._current_user, self._orig_image, self._result_image = 0.0, None, None, None
         self._history, self._particles, self._logo_pulse, self._logo_growing = [], [], 0, True
-        self._subtitle_idx, self._subtitle_texts = 0, ["Remove backgrounds instantly ✨", "Fast. Clean. Precise. 🎯", "Sign in to get started →"]
         self._build_fonts(); self._build_auth_ui(); self._center_window(560, 660); self._fade_in()
         try: db.init_db()
         except Exception as e: messagebox.showerror("DB Error", str(e))
@@ -62,7 +61,7 @@ class LoginApp(tk.Tk):
         w, h = self.bg_canvas.winfo_width() or 560, self.bg_canvas.winfo_height() or 660
         self._particles = [{"x": random.uniform(0, w), "y": random.uniform(0, h), "r": 2.5, "vx": random.uniform(-0.4, 0.4), "vy": -0.3, "alpha": 0.6}
                           for _ in range(NUM_PARTICLES)]
-        self._animate_particles(); self._animate_logo(); self._subtitle_lbl.config(text=self._subtitle_texts[0]) if hasattr(self, "_subtitle_lbl") else None
+        self._animate_particles(); self._animate_logo(); self._subtitle_lbl.config(text="Remove backgrounds instantly ✨") if hasattr(self, "_subtitle_lbl") else None
 
     def _animate_particles(self):
         c = self.bg_canvas; c.delete("particle")
@@ -197,11 +196,9 @@ class LoginApp(tk.Tk):
         self.progress_bar_fill = tk.Frame(self.progress_bar_bg, bg=NEON, height=4, width=0)
         self.progress_bar_fill.place(x=0, y=0, relheight=1.0, relwidth=0); self.progress_frame.grid_remove()
 
-    def _show_editor_panel(self):
+    def _on_remove_bg(self):
         if hasattr(self, "_history_frame") and self._history_frame.winfo_exists(): self._history_frame.grid_remove()
         self._editor_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-    def _on_remove_bg(self):
-        self._show_editor_panel()
 
     def _open_image(self):
         if not REMBG_AVAILABLE: messagebox.showerror("Missing library", "rembg is not installed.\n\nRun:\n  pip install rembg pillow", parent=self); return
@@ -249,7 +246,7 @@ class LoginApp(tk.Tk):
         if not rows: messagebox.showinfo("History", "No processing history yet.", parent=self); return
         self._editor_frame.grid_remove()
         if hasattr(self, "_history_frame") and self._history_frame.winfo_exists(): self._history_frame.destroy()
-        self._hist_thumb_refs, self._history_frame = [], tk.Frame(self._dash_body, bg=BG)
+        self._history_frame = tk.Frame(self._dash_body, bg=BG)
         self._history_frame.grid(row=0, column=1, sticky="nsew")
         self._history_frame.columnconfigure(0, weight=1); self._history_frame.rowconfigure(1, weight=1)
         top = tk.Frame(self._history_frame, bg=CARD)
