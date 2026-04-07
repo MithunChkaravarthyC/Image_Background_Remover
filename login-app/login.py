@@ -166,9 +166,7 @@ class LoginApp(tk.Tk):
     def _build_sidebar(self, parent):
         sb = tk.Frame(parent, bg=CARD, width=200, highlightthickness=1, highlightbackground=BORDER)
         sb.grid(row=0, column=0, sticky="ns"); sb.pack_propagate(False)
-        tk.Label(sb, text="Tools", font=self.f_card_title, bg=CARD, fg=TEXT, anchor="w", padx=16, pady=16).pack(fill="x")
-        tk.Frame(sb, bg=BORDER, height=1).pack(fill="x")
-        for label, cmd in [("🖼️  Remove BG", self._on_remove_bg), ("  History", self._on_history)]:
+        for label, cmd in [("🖼️   Remove BG", self._on_remove_bg), ("🕓   History", self._on_history)]:
             b = tk.Button(sb, text=label, command=cmd, font=self.f_dash_sub, bg=CARD, fg=TEXT, relief="flat", bd=0, cursor="hand2", anchor="w", padx=16, pady=12)
             b.pack(fill="x")
             b.bind("<Enter>", lambda e, w=b: w.config(bg=BORDER, fg=NEON))
@@ -185,10 +183,10 @@ class LoginApp(tk.Tk):
         self.canvas_orig.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
         self.canvas_result = tk.Canvas(ed, bg=CARD, bd=0, highlightthickness=1, highlightbackground=BORDER, width=PREVIEW_W, height=PREVIEW_H)
         self.canvas_result.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
-        self._draw_placeholder(self.canvas_orig, "Click 'Remove BG'"); self._draw_placeholder(self.canvas_result, "Result will appear here")
+        self._draw_placeholder(self.canvas_orig, "Click 'Open' to select image"); self._draw_placeholder(self.canvas_result, "Result will appear here")
         btn_row = tk.Frame(ed, bg=BG)
         btn_row.grid(row=2, column=0, columnspan=2, pady=(14, 0), sticky="ew"); btn_row.columnconfigure((0, 1, 2), weight=1)
-        self.open_btn = self._neon_btn_small(btn_row, "📂  Open", self._on_remove_bg, 0)
+        self.open_btn = self._neon_btn_small(btn_row, "📂  Open", self._open_image, 0)
         self.process_btn = self._neon_btn_small(btn_row, "✨  Remove BG", self._run_remove_bg, 1)
         self.save_btn = self._neon_btn_small(btn_row, "💾  Save", self._on_save, 2)
         self.process_btn.config(state="disabled"); self.save_btn.config(state="disabled")
@@ -204,6 +202,8 @@ class LoginApp(tk.Tk):
         self._editor_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
     def _on_remove_bg(self):
         self._show_editor_panel()
+
+    def _open_image(self):
         if not REMBG_AVAILABLE: messagebox.showerror("Missing library", "rembg is not installed.\n\nRun:\n  pip install rembg pillow", parent=self); return
         path = filedialog.askopenfilename(title="Select Image", filetypes=[("Image files", "*.png *.jpg *.jpeg *.webp *.bmp")])
         if not path: return
