@@ -20,7 +20,7 @@ class LoginApp(tk.Tk):
         self._alpha, self._current_user, self._orig_image, self._result_image = 0.0, None, None, None
         self._history, self._particles, self._logo_pulse, self._logo_growing = [], [], 0, True
         self._subtitle_idx, self._subtitle_texts = 0, ["Remove backgrounds instantly ✨", "Fast. Clean. Precise. 🎯", "Sign in to get started →"]
-        self._build_fonts(); self._build_auth_ui(); self._center_window(480, 660); self._fade_in()
+        self._build_fonts(); self._build_auth_ui(); self._center_window(560, 660); self._fade_in()
         try: db.init_db()
         except Exception as e: messagebox.showerror("DB Error", str(e))
 
@@ -54,19 +54,19 @@ class LoginApp(tk.Tk):
 
     def _place_card(self):
         self.auth_root.update_idletasks()
-        w, h = self.auth_root.winfo_width() or 480, self.auth_root.winfo_height() or 660
-        cw, ch = 380, min(h - 60, 600)
+        w, h = self.auth_root.winfo_width() or 560, self.auth_root.winfo_height() or 660
+        cw, ch = 460, min(h - 60, 600)
         self.card_frame.place(x=(w-cw)//2, y=(h-ch)//2, width=cw, height=ch)
 
     def _init_particles(self):
-        w, h = self.bg_canvas.winfo_width() or 480, self.bg_canvas.winfo_height() or 660
+        w, h = self.bg_canvas.winfo_width() or 560, self.bg_canvas.winfo_height() or 660
         self._particles = [{"x": random.uniform(0, w), "y": random.uniform(0, h), "r": 2.5, "vx": random.uniform(-0.4, 0.4), "vy": -0.3, "alpha": 0.6}
                           for _ in range(NUM_PARTICLES)]
         self._animate_particles(); self._animate_logo(); self._subtitle_lbl.config(text=self._subtitle_texts[0]) if hasattr(self, "_subtitle_lbl") else None
 
     def _animate_particles(self):
         c = self.bg_canvas; c.delete("particle")
-        w, h = c.winfo_width() or 480, c.winfo_height() or 660
+        w, h = c.winfo_width() or 560, c.winfo_height() or 660
         for p in self._particles:
             p["x"] += p["vx"]; p["y"] += p["vy"]
             if p["y"] < -10: p["y"], p["x"] = h + 5, random.uniform(0, w)
@@ -356,7 +356,7 @@ class LoginApp(tk.Tk):
     def _on_logout(self):
         self._current_user, self._orig_image, self._result_image = None, None, None
         if hasattr(self, 'dash_root'): self.dash_root.grid_remove()
-        self._center_window(480, 660); self.minsize(360, 560)
+        self._center_window(560, 660); self.minsize(360, 560)
         self.auth_root.grid(row=0, column=0, sticky="nsew"); self._switch_to("login")
 
     def _fade_in(self):
