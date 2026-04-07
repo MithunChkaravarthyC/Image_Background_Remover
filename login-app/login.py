@@ -18,7 +18,7 @@ class LoginApp(tk.Tk):
         super().__init__()
         self.title("Image Background Remover"); self.configure(bg=BG); self.resizable(True, True)
         self._alpha, self._current_user, self._orig_image, self._result_image = 0.0, None, None, None
-        self._history, self._logo_pulse, self._logo_growing = [], 0, True
+        self._history = []
         self._build_fonts(); self._build_auth_ui(); self._center_window(560, 660); self._fade_in()
         try: db.init_db()
         except Exception as e: messagebox.showerror("DB Error", str(e))
@@ -48,7 +48,6 @@ class LoginApp(tk.Tk):
             f.grid(row=0, column=0, sticky="nsew"); f.columnconfigure(0, weight=1)
         self._build_login_frame(); self._build_signup_frame()
         self.login_frame.tkraise()
-        self.after(100, self._animate_logo)
         self.auth_root.bind("<Configure>", lambda e: self._place_card())
 
     def _place_card(self):
@@ -56,14 +55,6 @@ class LoginApp(tk.Tk):
         w, h = self.auth_root.winfo_width() or 560, self.auth_root.winfo_height() or 660
         cw, ch = 460, min(h - 60, 600)
         self.card_frame.place(x=(w-cw)//2, y=(h-ch)//2, width=cw, height=ch)
-
-    def _animate_logo(self):
-        if not hasattr(self, "_logo_lbl"): self.after(100, self._animate_logo); return
-        self._logo_pulse += 0.04 if self._logo_growing else -0.04
-        if self._logo_pulse >= 1.0 or self._logo_pulse <= 0.0: self._logo_growing = not self._logo_growing
-        t = (math.sin(self._logo_pulse * math.pi) + 1) / 2
-        self._logo_lbl.config(fg=f"#{int(0x27+(0x39-0x27)*t):02x}{int(0xb3+(0xff-0xb3)*t):02x}{int(0x0d+(0x14-0x0d)*t):02x}")
-        self.after(50, self._animate_logo)
 
     def _build_login_frame(self):
         p = self.login_frame
