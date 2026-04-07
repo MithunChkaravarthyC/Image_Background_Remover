@@ -11,14 +11,14 @@ except ImportError:
 
 BG, CARD, BORDER, NEON, NEON_DIM, NEON_DARK = "#0d0d0d", "#1a1a1a", "#2a2a2a", "#39ff14", "#27b30d", "#0d3d05"
 TEXT, SUBTEXT, ERROR_CLR, SUCCESS = "#e0e0e0", "#888888", "#ff4444", "#39ff14"
-PREVIEW_W, PREVIEW_H, NUM_PARTICLES = 340, 280, 38
+PREVIEW_W, PREVIEW_H = 340, 280
 
 class LoginApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Image Background Remover"); self.configure(bg=BG); self.resizable(True, True)
         self._alpha, self._current_user, self._orig_image, self._result_image = 0.0, None, None, None
-        self._history, self._particles, self._logo_pulse, self._logo_growing = [], [], 0, True
+        self._history, self._logo_pulse, self._logo_growing = [], 0, True
         self._build_fonts(); self._build_auth_ui(); self._center_window(560, 660); self._fade_in()
         try: db.init_db()
         except Exception as e: messagebox.showerror("DB Error", str(e))
@@ -48,7 +48,7 @@ class LoginApp(tk.Tk):
             f.grid(row=0, column=0, sticky="nsew"); f.columnconfigure(0, weight=1)
         self._build_login_frame(); self._build_signup_frame()
         self.login_frame.tkraise()
-        self.after(100, self._init_particles)
+        self.after(100, self._animate_logo)
         self.auth_root.bind("<Configure>", lambda e: self._place_card())
 
     def _place_card(self):
@@ -56,21 +56,6 @@ class LoginApp(tk.Tk):
         w, h = self.auth_root.winfo_width() or 560, self.auth_root.winfo_height() or 660
         cw, ch = 460, min(h - 60, 600)
         self.card_frame.place(x=(w-cw)//2, y=(h-ch)//2, width=cw, height=ch)
-
-    def _init_particles(self):
-        w, h = self.bg_canvas.winfo_width() or 560, self.bg_canvas.winfo_height() or 660
-        self._particles = [{"x": random.uniform(0, w), "y": random.uniform(0, h), "r": 2.5, "vx": random.uniform(-0.4, 0.4), "vy": -0.3, "alpha": 0.6}
-                          for _ in range(NUM_PARTICLES)]
-        self._animate_particles(); self._animate_logo(); self._subtitle_lbl.config(text="Remove backgrounds instantly ✨") if hasattr(self, "_subtitle_lbl") else None
-
-    def _animate_particles(self):
-        c = self.bg_canvas; c.delete("particle")
-        w, h = c.winfo_width() or 560, c.winfo_height() or 660
-        for p in self._particles:
-            p["x"] += p["vx"]; p["y"] += p["vy"]
-            if p["y"] < -10: p["y"], p["x"] = h + 5, random.uniform(0, w)
-            c.create_oval(p["x"]-2, p["y"]-2, p["x"]+2, p["y"]+2, fill="#00ff0060", outline="", tags="particle")
-        self.after(40, self._animate_particles)
 
     def _animate_logo(self):
         if not hasattr(self, "_logo_lbl"): self.after(100, self._animate_logo); return
